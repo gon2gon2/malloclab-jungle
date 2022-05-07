@@ -219,3 +219,44 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
+
+/*
+ * find-fit - find free block bigger than or equal to asize
+ */
+static void *find_fit(size_t asize)
+{
+    char *bp;
+    /* set pointer to first block */
+    bp = heap_listp;
+
+    /* find block in list sequentially */
+    while (GET_SIZE(bp) < asize && GET_SIZE(bp) != 0){
+        bp = NEXT_BLKP(bp);
+    }
+
+    /* return NULL if there is not enough block */
+    if (GET_SIZE(bp) == 0)
+        return NULL;
+
+    return bp;
+
+}
+
+/*
+ * place - 현재 블럭사이즈가 나보다 크면 분할 아니면 걍 헤더푸터 세팅만
+ */
+
+static void place(void *bp, size_t asize)
+{
+    size_t current_block_size = GET_SIZE(HDRP(bp));
+
+    PUT(HDRP(bp), PACK(asize, 0));
+    PUT(FTRP(bp), PACK(asize, 0));
+    
+    if (current_block_size > asize){
+        size_t next_block_size = GET_SIZE(HDRP(NEXT_BLKP(bp)));
+        PUT(HDRP(NEXT_BLKP(bp)), PACK(asize, 0));
+        PUT(FTRP(NEXT_BLKP(bp)), PACK(asize, 0));
+    }
+    return bp;
+}
