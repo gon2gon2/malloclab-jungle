@@ -64,7 +64,7 @@ team_t team = {
 
 /* Given block btr bp, compute address of its header and footer */
 #define HDRP(bp)        ((char *)(bp) - WSIZE)
-#define FTRP(bp)        ((char *)(bp) - GET_SIZE(HDRP(bp)) - DSIZE)
+#define FTRP(bp)        ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
 
 /* Given block ptr bp, compute address of next and previous blocks */
 #define NEXT_BLKP(bp)   ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
@@ -72,8 +72,6 @@ team_t team = {
 
 /* Forward Declaration */
 static char *heap_listp;
-static int heap_size;
-
 static void *find_fit(size_t asize);
 static void *extend_heap(size_t words);
 static void place(void *bp, size_t asize);
@@ -111,14 +109,14 @@ static void *extend_heap(size_t words)
     size_t size;
 
     /* Allocate an even number of words to maintain alignment */
-    size = (words % 2) ? (words + 1) * WSIZE : words *WSIZE;
+    size = (words % 2) ? (words + 1) * WSIZE : words * WSIZE;
     if ((long)(bp = mem_sbrk(size)) == -1)
         return NULL;
 
     /* Initialize free block header/.footer and the epilogue header */
     PUT(HDRP(bp),PACK(size, 0));            /* Free block header */
     PUT(FTRP(bp),PACK(size, 0));            /* Free block footer */
-    PUT(HDRP(NEXT_BLKP(bp)),PACK(size, 0)); /* New eplogue header */
+    PUT(HDRP(NEXT_BLKP(bp)),PACK(0, 1)); /* New eplogue header */
 
     /* Coalesce if the previous block was free */
     return coalesce(bp);
@@ -154,14 +152,14 @@ static void *coalesce(void *bp)
     }
 
     else if (!prev_alloc && next_alloc) {
-        size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
+        size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
         bp = PREV_BLKP(bp);
     }
 
     else {
-        size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
+        size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(PREV_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
@@ -182,6 +180,9 @@ void *mm_malloc(size_t size)
     /* Ignore spruious requests */
     if (size == 0 )
         return NULL;
+    
+    if (size <= DSIZE)
+        asize = 2*DSIZE;
     else
         asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE);
 
@@ -206,12 +207,13 @@ void *mm_realloc(void *ptr, size_t size)
 {
     void *oldptr = ptr;
     void *newptr;
-    size_t copySize;
+    size_t copySize; 
     
     newptr = mm_malloc(size);
     if (newptr == NULL)
       return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+    // copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+    copySize = GET_SIZE(HDRP(oldptr));
     if (size < copySize)
       copySize = size;
     memcpy(newptr, oldptr, copySize);
@@ -219,44 +221,57 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
-
 /*
  * find-fit - find free block bigger than or equal to asize
  */
 static void *find_fit(size_t asize)
 {
-    char *bp;
-    /* set pointer to first block */
-    bp = heap_listp;
-
-    /* find block in list sequentially */
-    while (GET_SIZE(bp) < asize && GET_SIZE(bp) != 0){
-        bp = NEXT_BLKP(bp);
+    void *bp;
+    /* set pointer to first block, find block in list sequentially */
+    for (bp = (char *)heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            return bp;
+        }
     }
-
-    /* return NULL if there is not enough block */
-    if (GET_SIZE(bp) == 0)
-        return NULL;
-
-    return bp;
-
+    return NULL;
 }
 
 /*
  * place - 현재 블럭사이즈가 나보다 크면 분할 아니면 걍 헤더푸터 세팅만
  */
 
+// static void place(void *bp, size_t asize)
+// {
+//     size_t current_block_size = GET_SIZE(HDRP(bp));
+
+//     PUT(HDRP(bp), PACK(asize, 1));
+//     PUT(FTRP(bp), PACK(asize, 1));
+    
+//     if ((current_block_size - asize) >= (2*DSIZE)){
+//         size_t next_block_size = GET_SIZE(HDRP(NEXT_BLKP(bp)));
+//         bp = NEXT_BLKP(bp);
+//         PUT(HDRP(bp), PACK(current_block_size - asize, 0));
+//         PUT(FTRP(bp), PACK(current_block_size - asize, 0));
+//     }
+// }
 static void place(void *bp, size_t asize)
 {
-    size_t current_block_size = GET_SIZE(HDRP(bp));
+    /*
+    csize : current block size
+    asize : allocated block size
+    */
+   
+    size_t csize = GET_SIZE(HDRP(bp));
 
-    PUT(HDRP(bp), PACK(asize, 0));
-    PUT(FTRP(bp), PACK(asize, 0));
-    
-    if (current_block_size > asize){
-        size_t next_block_size = GET_SIZE(HDRP(NEXT_BLKP(bp)));
-        PUT(HDRP(NEXT_BLKP(bp)), PACK(asize, 0));
-        PUT(FTRP(NEXT_BLKP(bp)), PACK(asize, 0));
+    if ((csize - asize) >= (2*DSIZE)) {
+        PUT(HDRP(bp), PACK(asize, 1));
+        PUT(FTRP(bp), PACK(asize, 1));
+        bp = NEXT_BLKP(bp);
+        PUT(HDRP(bp), PACK(csize-asize, 0));
+        PUT(FTRP(bp), PACK(csize-asize, 0));
     }
-    return bp;
+    else {
+        PUT(HDRP(bp), PACK(csize, 1));
+        PUT(FTRP(bp), PACK(csize, 1));
+    }
 }
