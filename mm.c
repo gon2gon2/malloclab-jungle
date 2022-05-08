@@ -226,13 +226,31 @@ void *mm_realloc(void *ptr, size_t size)
  */
 static void *find_fit(size_t asize)
 {
+    // /* first fit */
+    // void *bp;
+    // /* set pointer to first block, find block in list sequentially */
+    // for (bp = (char *)heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+    //     if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+    //         return bp;
+    //     }
+    // }
+    // return NULL;
+
+
+    /* best fit */
     void *bp;
-    /* set pointer to first block, find block in list sequentially */
+    void *best_p = (char *)heap_listp;
+
     for (bp = (char *)heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
-            return bp;
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp))) && (GET_SIZE(HDRP(bp)) - asize) < (GET_SIZE(HDRP(best_p)) - asize)) {
+            best_p = bp;
         }
     }
+
+    if (best_p != (char *)heap_listp){
+        return best_p;
+    }
+
     return NULL;
 }
 
