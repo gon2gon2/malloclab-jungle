@@ -39,10 +39,9 @@ team_t team = {
 #define ALIGNMENT 8
 
 /* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
-
-
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+/* unused */
+// #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
+// #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
 /* Basic constants and macros */
 #define WSIZE 4                 /* Word and header/footer size (bytes) */
@@ -94,8 +93,8 @@ int mm_init(void)
 
     PUT(heap_listp, 0);                            /* Alignment padding */
     PUT(heap_listp + (1*WSIZE), PACK(2*DSIZE, 1)); /* Prologue header */
-    PUT(heap_listp + (2*WSIZE), heap_listp+(3*WSIZE));             /* Pred pointer */
-    PUT(heap_listp + (3*WSIZE), heap_listp+(2*WSIZE)); /* Succ pointer */
+    PUT(heap_listp + (2*WSIZE), (unsigned int)heap_listp+(3*WSIZE));  /* Pred pointer */
+    PUT(heap_listp + (3*WSIZE), (unsigned int) heap_listp+(2*WSIZE)); /* Succ pointer */
     PUT(heap_listp + (4*WSIZE), PACK(2*DSIZE, 1)); /* Prologue footer */
     PUT(heap_listp + (5*WSIZE), PACK(0, 1));       /* Epilogue header */
     heap_listp += (2*WSIZE);
